@@ -389,25 +389,51 @@ exports.getAssignmentResults = async (req, res) => {
         ORDER BY ur.created_at
       `, [userId, assignmentId]);
 
-      // Format the response
-      const formattedResponses = responses.map(response => ({
-        questionId: response.question_id,
-        question: response.question,
-        category: response.category_name,
-        options: JSON.parse(response.options),
-        userAnswer: response.user_answer,
-        correctAnswer: response.correct_answer,
-        isSure: Boolean(response.is_sure),
-        status: response.status,
-        responseTime: response.response_time,
-        feedback: {
-          short: response.short_content,
-          long: {
-            text: response.long_content_text,
-            filePath: response.long_content_file_path
-          }
-        }
-      }));
+      // Format the response to match submitAssignment structure
+      const formattedResponses = responses.map(response => {
+        const isCorrect = response.user_answer === response.correct_answer;
+        const status = response.status || 
+                      (response.is_sure 
+                        ? (isCorrect ? 'sure_correct' : 'sure_incorrect')
+                        : (isCorrect ? 'not_sure_correct' : 'not_sure_incorrect'));
+
+        // Determine feedback based on status
+       // In your getAssignmentResults controller, modify the feedback object creation:
+let feedback = {
+  short: null,
+  long: {
+    text: null,
+    filePath: null
+  }
+};
+
+switch(status) {
+  case 'not_sure_incorrect':
+  case 'sure_incorrect':
+    feedback.long = {
+      text: response.long_content_text,
+      filePath: response.long_content_file_path
+    };
+    break;
+  case 'not_sure_correct':
+    feedback.short = response.short_content;
+    break;
+  // 'sure_correct' will return the empty feedback object
+}
+
+        return {
+          questionId: response.question_id,
+          status,
+          correctAnswer: response.correct_answer,
+          userAnswer: response.user_answer,
+          isSure: Boolean(response.is_sure),
+          feedback,
+          question: response.question,
+          options: response.options,
+          category: response.category_name,
+          responseTime: response.response_time
+        };
+      });
 
       res.status(200).json({
         success: true,
@@ -426,7 +452,8 @@ exports.getAssignmentResults = async (req, res) => {
       success: false,
       error: error.message
     });
-  }}
+  }
+};
 
   // Add this to your userController.js
 exports.getUserAssignmentCompletionDetails = async (req, res) => {
